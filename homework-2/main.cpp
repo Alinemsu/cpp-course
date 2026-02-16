@@ -1,4 +1,4 @@
-﻿#include <iostream>
+#include <iostream>
 #include "matrix.hpp"
 
 int main()
@@ -8,9 +8,8 @@ int main()
     for (int i = 0; i < 10; ++i)
         matrix[i][i] = i;
 
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 10; ++i)
         matrix[i][9 - i] = 9 - i;
-    }
 
     std::cout << "Fragment [1,1]..[8,8]: " << std::endl;
     for (int i = 1; i < 9; ++i) {
@@ -31,24 +30,18 @@ int main()
         std::cout << i << " " << j << " " << v << std::endl;
     }
 
-    {
-        Matrix<int, 0, 2> matrix2;
-
-        ((matrix2[100][100] = 314) = 0) = 217;
-
-        std::cout << (int)matrix2[100][100] << std::endl;
-        std::cout << matrix2.size() << std::endl;
-    }
+    Matrix<int, 0, 2> matrix2;
+    ((matrix2[100][100] = 314) = 0) = 217;
+    std::cout << (int)matrix2[100][100] << std::endl;
+    std::cout << matrix2.size() << std::endl;
 
     Matrix<int, 0, 3> cube;
 
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 10; ++i)
         cube[i][i][i] = i + 1;
-    }
 
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 10; ++i)
         cube[i][i][9 - i] = 100 + i;
-    }
 
     std::cout << "3D checks:" << std::endl;
     std::cout << "(0,0,0) = " << (int)cube[0][0][0] << std::endl;
@@ -66,11 +59,10 @@ int main()
             << " " << value << std::endl;
     }
 
-    {
-        Matrix<int, 0, 3> cube2;
-        ((cube2[1][2][3] = 314) = 0) = 217;
-        std::cout << "3D chain value: " << (int)cube2[1][2][3] << std::endl;
-        std::cout << "3D chain size: " << cube2.size() << std::endl;
-    }
+    Matrix<int, 0, 3> cube2;
+    ((cube2[1][2][3] = 314) = 0) = 217;
+    std::cout << "3D chain value: " << (int)cube2[1][2][3] << std::endl;
+    std::cout << "3D chain size: " << cube2.size() << std::endl;
+
     return 0;
 }
