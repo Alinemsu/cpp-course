@@ -11,8 +11,14 @@
 9. Г. Саттер, А. Александреску - Стандарты программирования на С++. 101 правило и рекомендация
 10. А. Александреску - Современное проектирование на C++
 11. С. Макконнелл - Совершенный код
+12. К. Гантерот - Оптимизация программ на C++. Проверенные методы повышения производительности
+13. A. Polukhin - Boost C++ Application Development Cookbook
+14. У. Стивенс - UNIX: Разработка сетевых приложений
 
 # Ссылки
 
 1. [Refactoring Guru](https://refactoring.guru/ru/design-patterns/catalog)
 2. [What is an Allocator?](https://medium.com/@vgasparyan1995/what-is-an-allocator-c8df15a93ed)
+3. [libevent](https://libevent.org/doc/)
+4. [libev](http://pod.tst.eu/http://cvs.schmorp.de/libev/ev.pod)
+5. [boost::asio](https://www.boost.org/doc/libs/latest/doc/html/boost_asio.html)
