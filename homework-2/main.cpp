@@ -1,6 +1,7 @@
 #include <iostream>
 #include "matrix.hpp"
 
+
 void fill2D(Matrix<int, 0>& matrix)
 {
     for (int i = 0; i < 10; ++i)
@@ -12,7 +13,7 @@ void fill2D(Matrix<int, 0>& matrix)
 
 void print2DFragment(Matrix<int, 0>& matrix)
 {
-    std::cout << "Fragment [1,1]..[8,8]: " << std::endl;
+    std::cout << "From [1,1] to [8,8]: " << std::endl;
     for (int i = 1; i < 9; ++i)
     {
         for (int j = 1; j < 9; ++j)
@@ -71,12 +72,14 @@ void print3DCells(Matrix<int, 0, 3>& cube)
 {
     for (auto c : cube)
     {
-        Matrix<int, 0, 3>::Key key;
-        int value;
-        std::tie(key, value) = c;
+        int x;
+        int y;
+        int z;
+        int v;
 
-        std::cout << key[0] << " " << key[1] << " " << key[2]
-            << " " << value << std::endl;
+        std::tie(x, y, z, v) = c;
+
+        std::cout << x << " " << y << " " << z << " " << v << std::endl;
     }
 }
 
