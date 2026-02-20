@@ -22,27 +22,27 @@ public:
 	public:
 		iterator(Node* p)
 		{
-			p_ = p;
+			current_ = p;
 		}
 
 		T& operator*()
 		{
-			return p_->value;
+			return current_->value;
 		}
 
 		iterator& operator++()
 		{
-			p_ = p_->next;
+			current_ = current_->next;
 			return *this;
 		}
 
 		bool operator!=(const iterator& other)
 		{
-			return p_ != other.p_;
+			return current_ != other.current_;
 		}
 
 	private:
-		Node* p_;
+		Node* current_;
 	};
 
 	Container(const Alloc& a = Alloc())
