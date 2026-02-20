@@ -1,222 +1,219 @@
 #pragma once
-#include <new>
 
-typedef unsigned long long size_type;
+#include <cstddef>   // std::size_t, std::max_align_t
+#include <cstdlib>   // std::malloc, std::free, std::aligned_alloc (C++17)
+#include <new>       // std::bad_alloc
+#include <algorithm> // std::max
 
-inline size_type align_up_resize(size_type x, size_type a)
+using size_type = std::size_t;
+
+static inline size_type align_up_resize(size_type x, size_type a) noexcept
 {
-    if (a <= 1)
-        return x;
+	
+	return (x + (a - 1)) & ~(a - 1);
+}
 
-    while (x % a != 0)
-        x = x + 1;
+static inline size_type align_up_to_multiple(size_type x, size_type a) noexcept
+{
+	
+	return (x + (a - 1)) / a * a;
+}
 
-    return x;
+static inline void* aligned_malloc(size_type alignment, size_type size)
+{
+	alignment = std::max(alignment, alignof(std::max_align_t));
+
+#if defined(__cpp_aligned_new) || (defined(__cpp_lib_aligned_alloc) && __cpp_lib_aligned_alloc >= 201606L)
+	
+	size = align_up_to_multiple(size, alignment);
+	if (void* p = std::aligned_alloc(alignment, size))
+		return p;
+	return nullptr;
+#else
+	
+	(void)alignment;
+	return std::malloc(size);
+#endif
+}
+
+static inline void aligned_free(void* p) noexcept
+{
+	std::free(p);
 }
 
 struct FreeNode
 {
-    FreeNode* next;
-    size_type bytes;
+	FreeNode* next;
+	size_type bytes;
 };
 
 struct Block
 {
-    unsigned char* data;
-    size_type capacity_bytes;
-    size_type used_bytes;
-    Block* next;
+	unsigned char* data = nullptr;
+	size_type capacity_bytes = 0;
+	size_type used_bytes = 0;
+	Block* next = nullptr;
 };
 
 struct ResizableState
 {
-    Block* head;
-    Block* current;
-    FreeNode* free_head;
-    size_type initial_bytes;
-    unsigned long refs;
+	Block* head = nullptr;
+	Block* current = nullptr;
+	FreeNode* free_head = nullptr;
+	size_type initial_bytes = 0;
+	unsigned long refs = 1;
 
-    ResizableState(size_type bytes)
-    {
-        head = 0;
-        current = 0;
-        free_head = 0;
-        initial_bytes = bytes;
-        refs = 1;
-    }
+	explicit ResizableState(size_type bytes) : initial_bytes(bytes) {}
 
-    ~ResizableState()
-    {
-        Block* b = head;
+	~ResizableState()
+	{
+		for (Block* b = head; b;)
+		{
+			Block* next = b->next;
+			aligned_free(b->data);
+			std::free(b);
+			b = next;
+		}
+	}
 
-        while (b != 0)
-        {
-            Block* next = b->next;
-            ::operator delete((void*)b->data);
-            ::operator delete((void*)b);
-            b = next;
-        }
-    }
+	ResizableState(const ResizableState&) = delete;
+	ResizableState& operator=(const ResizableState&) = delete;
 
-    ResizableState(const ResizableState&) = delete;
-    ResizableState& operator=(const ResizableState&) = delete;
+	size_type pick_capacity(size_type need_bytes) const noexcept
+	{
+		size_type cap = initial_bytes ? initial_bytes : 1024;
+		while (cap < need_bytes + 64)
+			cap *= 2;
+		return cap;
+	}
 
-    size_type pick_capacity(size_type need_bytes)
-    {
-        size_type cap = initial_bytes;
+	void add_block(size_type cap, size_type data_alignment)
+	{
+		Block* b = static_cast<Block*>(std::malloc(sizeof(Block)));
+		if (!b) throw std::bad_alloc();
 
-        if (cap == 0)
-            cap = 1024;
+		// Value-init fields
+		*b = Block{};
 
-        while (cap < need_bytes + 64)
-            cap = cap * 2;
+		b->data = static_cast<unsigned char*>(aligned_malloc(data_alignment, cap));
+		if (!b->data)
+		{
+			std::free(b);
+			throw std::bad_alloc();
+		}
 
-        return cap;
-    }
+		b->capacity_bytes = cap;
 
-    void add_block(size_type cap)
-    {
-        Block* b = (Block*)::operator new(sizeof(Block));
-
-        b->data = (unsigned char*)::operator new((size_t)cap);
-        b->capacity_bytes = cap;
-        b->used_bytes = 0;
-        b->next = 0;
-
-        if (head == 0)
-            head = b;
-
-        if (current != 0)
-            current->next = b;
-
-        current = b;
-    }
+		if (!head) head = b;
+		if (current) current->next = b;
+		current = b;
+	}
 };
 
-template<class T>
+template <class T>
 class ResizableAllocator
 {
 public:
-    typedef T value_type;
+	using value_type = T;
 
-    ResizableAllocator(size_type initial_bytes = 0)
-    {
-        state_ = new ResizableState(initial_bytes);
-    }
+	explicit ResizableAllocator(size_type initial_bytes = 0)
+		: state_(new ResizableState(initial_bytes))
+	{
+	}
 
-    ResizableAllocator(const ResizableAllocator& other)
-    {
-        state_ = other.state_;
-        state_->refs = state_->refs + 1;
-    }
+	ResizableAllocator(const ResizableAllocator& other) noexcept
+		: state_(other.state_)
+	{
+		++state_->refs;
+	}
 
-    template<class U>
-    ResizableAllocator(const ResizableAllocator<U>& other)
-    {
-        state_ = other.state_;
-        state_->refs = state_->refs + 1;
-    }
+	template <class U>
+	ResizableAllocator(const ResizableAllocator<U>& other) noexcept
+		: state_(other.state_)
+	{
+		++state_->refs;
+	}
 
-    ~ResizableAllocator()
-    {
-        state_->refs = state_->refs - 1;
-        if (state_->refs == 0)
-            delete state_;
-    }
+	~ResizableAllocator()
+	{
+		if (--state_->refs == 0)
+			delete state_;
+	}
 
-    T* allocate(size_type n)
-    {
-        if (n == 0)
-            return 0;
+	T* allocate(size_type n)
+	{
+		if (n == 0) return nullptr;
 
-        size_type bytes = n * (size_type)sizeof(T);
-        size_type a = (size_type)alignof(T);
+		const size_type bytes = n * sizeof(T);
+		const size_type a = alignof(T);
 
-        if (n == 1)
-            if ((size_type)sizeof(T) >= (size_type)sizeof(FreeNode))
-            {
-                T* p = this->allocate_from_free_list(bytes);
-                if (p != 0)
-                    return p;
-            }
+		if (n == 1 && sizeof(T) >= sizeof(FreeNode))
+		{
+			if (T* p = allocate_from_free_list(bytes))
+				return p;
+		}
 
-        if (state_->current == 0)
-            state_->add_block(state_->pick_capacity(bytes));
+		if (!state_->current)
+			state_->add_block(state_->pick_capacity(bytes), a);
 
-        size_type start = align_up_resize(state_->current->used_bytes, a);
+		size_type start = align_up_resize(state_->current->used_bytes, a);
+		if (start + bytes > state_->current->capacity_bytes)
+		{
+			state_->add_block(state_->pick_capacity(bytes), a);
+			start = align_up_resize(state_->current->used_bytes, a);
+		}
 
-        if (start + bytes > state_->current->capacity_bytes)
-        {
-            state_->add_block(state_->pick_capacity(bytes));
-            start = align_up_resize(state_->current->used_bytes, a);
-        }
+		if (start + bytes > state_->current->capacity_bytes)
+			throw std::bad_alloc();
 
-        if (start + bytes > state_->current->capacity_bytes)
-            throw std::bad_alloc();
+		T* p = reinterpret_cast<T*>(state_->current->data + start);
+		state_->current->used_bytes = start + bytes;
+		return p;
+	}
 
-        T* p = (T*)(state_->current->data + start);
-        state_->current->used_bytes = start + bytes;
+	void deallocate(T* p, size_type n) noexcept
+	{
+		if (!p) return;
+		if (n != 1) return;
+		if (sizeof(T) < sizeof(FreeNode)) return;
 
-        return p;
-    }
+		auto* node = reinterpret_cast<FreeNode*>(p);
+		node->bytes = sizeof(T);
+		node->next = state_->free_head;
+		state_->free_head = node;
+	}
 
-    void deallocate(T* p, size_type n)
-    {
-        if (p == 0)
-            return;
+	template <class U>
+	bool operator==(const ResizableAllocator<U>& other) const noexcept
+	{
+		return state_ == other.state_;
+	}
 
-        if (n != 1)
-            return;
-
-        if ((size_type)sizeof(T) < (size_type)sizeof(FreeNode))
-            return;
-
-        FreeNode* node = (FreeNode*)p;
-        node->bytes = (size_type)sizeof(T);
-        node->next = state_->free_head;
-        state_->free_head = node;
-    }
-
-    template<class U>
-    bool operator==(const ResizableAllocator<U>& other) const
-    {
-        return state_ == other.state_;
-    }
-
-    template<class U>
-    bool operator!=(const ResizableAllocator<U>& other) const
-    {
-        return state_ != other.state_;
-    }
+	template <class U>
+	bool operator!=(const ResizableAllocator<U>& other) const noexcept
+	{
+		return state_ != other.state_;
+	}
 
 private:
-    template<class U>
-    friend class ResizableAllocator;
+	template <class U>
+	friend class ResizableAllocator;
 
-    ResizableState* state_;
+	ResizableState* state_;
 
-    T* allocate_from_free_list(size_type bytes)
-    {
-        FreeNode* prev = 0;
-        FreeNode* cur = state_->free_head;
-
-        while (cur != 0)
-        {
-            if (cur->bytes == bytes)
-            {
-                if (prev == 0)
-                    state_->free_head = cur->next;
-
-                if (prev != 0)
-                    prev->next = cur->next;
-
-                return (T*)cur;
-            }
-
-            prev = cur;
-            cur = cur->next;
-        }
-
-        return 0;
-    }
+	T* allocate_from_free_list(size_type bytes) noexcept
+	{
+		FreeNode** link = &state_->free_head;
+		while (*link)
+		{
+			FreeNode* node = *link;
+			if (node->bytes == bytes)
+			{
+				*link = node->next;
+				return reinterpret_cast<T*>(node);
+			}
+			link = &node->next;
+		}
+		return nullptr;
+	}
 };
