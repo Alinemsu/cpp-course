@@ -2,6 +2,7 @@
 #include <map>
 #include <array>
 #include <tuple>
+#include <utility>
 
 template<class ValueType, ValueType DefaultValue, std::size_t DimensionCount = 2>
 class Matrix;
@@ -87,8 +88,15 @@ public:
             return it_ != other.it_;
         }
 
-        std::tuple<Key, ValueType> operator*() const {
-            return std::tuple<Key, ValueType>(it_->first, it_->second);
+        template<std::size_t... Is>
+        auto make_tuple_(std::index_sequence<Is...>) const
+        {
+            return std::make_tuple(it_->first[Is]..., it_->second);
+        }
+
+        auto operator*() const
+        {
+            return make_tuple_(std::make_index_sequence<DimensionCount>{});
         }
     };
 
@@ -132,118 +140,9 @@ public:
         return matrix_->get_(key_);
     }
 
-    MatrixRow& operator=(const ValueType& value) {
+    MatrixRow operator=(const ValueType& value) {
         matrix_->set_(key_, value);
         return *this;
     }
 };
 
-template<class ValueType, ValueType DefaultValue>
-class Matrix<ValueType, DefaultValue, 2> {
-public:
-    Matrix() = default;
-
-    int size() const {
-        return (int)data_.size();
-    }
-
-    struct Key {
-        int row;
-        int col;
-    };
-
-    struct KeyLess {
-        bool operator()(const Key& a, const Key& b) const {
-            if (a.row != b.row) {
-                return a.row < b.row;
-            }
-            return a.col < b.col;
-        }
-    };
-
-private:
-    std::map<Key, ValueType, KeyLess> data_;
-
-    ValueType get_(int row, int col) const {
-        auto it = data_.find(Key{ row, col });
-        if (it == data_.end()) {
-            return DefaultValue;
-        }
-        return it->second;
-    }
-
-    void set_(int row, int col, const ValueType& value) {
-        if (value == DefaultValue) {
-            data_.erase(Key{ row, col });
-        }
-        else {
-            data_[Key{ row, col }] = value;
-        }
-    }
-
-public:
-    class Cell {
-        Matrix* matrix_;
-        int row_;
-        int col_;
-    public:
-        Cell(Matrix* m, int row, int col)
-            : matrix_(m), row_(row), col_(col) {
-        }
-
-        operator ValueType() const {
-            return matrix_->get_(row_, col_);
-        }
-
-        Cell& operator=(const ValueType& value) {
-            matrix_->set_(row_, col_, value);
-            return *this;
-        }
-    };
-
-    class Row {
-        Matrix* matrix_;
-        int row_;
-    public:
-        Row(Matrix* m, int row)
-            : matrix_(m), row_(row) {
-        }
-
-        Cell operator[](int col) {
-            return Cell(matrix_, row_, col);
-        }
-    };
-
-    Row operator[](int row) {
-        return Row(this, row);
-    }
-
-    class iterator {
-        typename std::map<Key, ValueType, KeyLess>::iterator it_;
-    public:
-        iterator(typename std::map<Key, ValueType, KeyLess>::iterator it)
-            : it_(it) {
-        }
-
-        iterator& operator++() {
-            ++it_;
-            return *this;
-        }
-
-        bool operator!=(const iterator& other) const {
-            return it_ != other.it_;
-        }
-
-        std::tuple<int, int, ValueType> operator*() const {
-            return std::tuple<int, int, ValueType>(it_->first.row, it_->first.col, it_->second);
-        }
-    };
-
-    iterator begin() {
-        return iterator(data_.begin());
-    }
-
-    iterator end() {
-        return iterator(data_.end());
-    }
-};
