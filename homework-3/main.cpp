@@ -2,9 +2,9 @@
 #include <map>
 #include <utility>
 
-#include "allocator.h"
-#include "resizable_allocator.h"
-#include "container.h"
+#include "allocator.hpp"
+#include "resizable_allocator.hpp"
+#include "container.hpp"
 
 long long factorial(int n)
 {
